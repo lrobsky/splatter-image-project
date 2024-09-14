@@ -434,10 +434,10 @@ class SingleImageSongUNetPredictor(nn.Module):
         self.out_channels = out_channels
         self.cfg = cfg
         if cfg.cam_embd.embedding is None:
-            in_channels = 3
+            in_channels = 4
             emb_dim_in = 0
         else:
-            in_channels = 3
+            in_channels = 4
             emb_dim_in = 6 * cfg.cam_embd.dimension
 
         self.encoder = SongUNet(cfg.data.training_resolution, 
@@ -553,27 +553,27 @@ class GaussianSplatPredictor(nn.Module):
         bias_inits = []
 
         if with_offset:
-            split_dimensions = split_dimensions + [1, 3, 1, 3, 4, 3]
-            scale_inits = scale_inits + [cfg.model.depth_scale, 
+            split_dimensions = split_dimensions + [3, 1, 3, 4, 3]
+            scale_inits = scale_inits + [
                            cfg.model.xyz_scale, 
                            cfg.model.opacity_scale, 
                            cfg.model.scale_scale,
                            1.0,
                            5.0]
-            bias_inits = [cfg.model.depth_bias,
+            bias_inits = [
                           cfg.model.xyz_bias, 
                           cfg.model.opacity_bias,
                           np.log(cfg.model.scale_bias),
                           0.0,
                           0.0]
         else:
-            split_dimensions = split_dimensions + [1, 1, 3, 4, 3]
-            scale_inits = scale_inits + [cfg.model.depth_scale, 
+            split_dimensions = split_dimensions + [1, 3, 4, 3]
+            scale_inits = scale_inits + [
                            cfg.model.opacity_scale, 
                            cfg.model.scale_scale,
                            1.0,
                            5.0]
-            bias_inits = bias_inits + [cfg.model.depth_bias,
+            bias_inits = bias_inits + [
                           cfg.model.opacity_bias,
                           np.log(cfg.model.scale_bias),
                           0.0,
@@ -690,6 +690,11 @@ class GaussianSplatPredictor(nn.Module):
                 activate_output=True,
                 num_epoch=5000
                 ):
+        # Pull the depth image from the data x
+        # print(f'x shape = {x.shape}')
+        depth = x[:,:,3,...]
+        # print(f'depth shape = {depth.shape}')
+        
         B = x.shape[0]
         N_views = x.shape[1]
         # UNet attention will reshape outputs so that there is cross-view attention
@@ -720,20 +725,26 @@ class GaussianSplatPredictor(nn.Module):
 
         source_cameras_view_to_world = source_cameras_view_to_world.reshape(B*N_views, *source_cameras_view_to_world.shape[2:])
         x = x.contiguous(memory_format=torch.channels_last)
+        
+
 
         if self.cfg.model.network_with_offset:
-
+            #
             split_network_outputs = self.network_with_offset(x,
                                                              film_camera_emb=film_camera_emb,
                                                              N_views_xa=N_views_xa
                                                              )
-
+            print(f'split_network_outputs shape before= {split_network_outputs.shape}')
             split_network_outputs = split_network_outputs.split(self.split_dimensions_with_offset, dim=1)
-            depth, offset, opacity, scaling, rotation, features_dc = split_network_outputs[:6]
+            # print(f'split_network_outputs shape after= {split_network_outputs.shape}')
+            offset, opacity, scaling, rotation, features_dc = split_network_outputs[:5]
+            print(f'opacity shape= {opacity.shape}')
+
+
             # print(f'------------------------------------------------------- DEPTH SHAPE  {depth.shape}')
-            if num_epoch % 100 == 0:
-                torch.set_printoptions(profile="full")
-                save_path = f'E:\\Coding\\Computer Vision\\splatter-image\\tests\\training_out_1'
+            # if num_epoch % 100 == 0:
+            #     torch.set_printoptions(profile="full")
+            #     save_path = f'E:\\Coding\\Computer Vision\\splatter-image\\tests\\training_out_1'
 
                 # # Convert tensors to NumPy arrays
                 # depth_array = depth.detach().cpu().numpy()
@@ -764,63 +775,63 @@ class GaussianSplatPredictor(nn.Module):
                 #     np.savetxt(f, features_dc_array.flatten(), fmt='%.8f')
 
 
-                depth_im = depth.detach().cpu().squeeze(1).numpy()  # Remove batch and channel dimension if present
+                # depth_im = depth.detach().cpu().squeeze(1).numpy()  # Remove batch and channel dimension if present
 
-                # If you have multiple images in the batch, you can loop through them
-                for i in range(depth_im.shape[0]):
-                    # Normalize the depth image to the range [0, 1]
-                    min_val = depth_im[i].min()
-                    max_val = depth_im[i].max()
-                    normalized_depth = (depth_im[i] - min_val) / (max_val - min_val)
+                # # If you have multiple images in the batch, you can loop through them
+                # for i in range(depth_im.shape[0]):
+                #     # Normalize the depth image to the range [0, 1]
+                #     min_val = depth_im[i].min()
+                #     max_val = depth_im[i].max()
+                #     normalized_depth = (depth_im[i] - min_val) / (max_val - min_val)
                                     
-                    depth_image_uint8 = (normalized_depth * 255).astype('uint8')
+                #     depth_image_uint8 = (normalized_depth * 255).astype('uint8')
 
-                    # Display the normalized grayscale image
-                    plt.imshow(depth_image_uint8, cmap='gray')
-                    plt.colorbar()
-                    plt.title(f"Depth Image {i+1}")
-                    plt.savefig(save_path + f'\\output_{num_epoch}_depth_{i}64.png')
-                    plt.clf()
+                #     # Display the normalized grayscale image
+                #     plt.imshow(depth_image_uint8, cmap='gray')
+                #     plt.colorbar()
+                #     plt.title(f"Depth Image {i+1}")
+                #     plt.savefig(save_path + f'\\output_{num_epoch}_depth_{i}64.png')
+                #     plt.clf()
 
-                # Assuming 'offset' has the shape (2, 3, 128, 128)
-                offset_im = offset.detach().cpu().numpy()  # Convert to numpy array
+                # # Assuming 'offset' has the shape (2, 3, 128, 128)
+                # offset_im = offset.detach().cpu().numpy()  # Convert to numpy array
                 
-                for i in range(offset_im.shape[0]):
+                # for i in range(offset_im.shape[0]):
 
-                    # Select the i-th image in the batch
-                    offset_im1 = offset_im[i]  # Shape becomes (3, 128, 128)
+                #     # Select the i-th image in the batch
+                #     offset_im1 = offset_im[i]  # Shape becomes (3, 128, 128)
 
-                    # Normalize each channel independently to [0, 255] range
-                    offset_im1 = 255 * (offset_im1 - offset_im1.min(axis=(1, 2), keepdims=True)) / (offset_im1.ptp(axis=(1, 2), keepdims=True))
+                #     # Normalize each channel independently to [0, 255] range
+                #     offset_im1 = 255 * (offset_im1 - offset_im1.min(axis=(1, 2), keepdims=True)) / (offset_im1.ptp(axis=(1, 2), keepdims=True))
 
-                    # Transpose the image to (H, W, 3) for RGB visualization
-                    offset_im1 = np.transpose(offset_im1, (1, 2, 0)).astype(np.uint8)  # Shape becomes (128, 128, 3)
+                #     # Transpose the image to (H, W, 3) for RGB visualization
+                #     offset_im1 = np.transpose(offset_im1, (1, 2, 0)).astype(np.uint8)  # Shape becomes (128, 128, 3)
 
-                    # Display the offset image as an RGB image
-                    plt.imshow(offset_im1)
-                    plt.title(f"Offset Image as 2D RGB {i+1}")
+                #     # Display the offset image as an RGB image
+                #     plt.imshow(offset_im1)
+                #     plt.title(f"Offset Image as 2D RGB {i+1}")
 
-                    norm_x = mcolors.Normalize(vmin=0, vmax=255)
-                    norm_y = mcolors.Normalize(vmin=0, vmax=255)
-                    norm_z = mcolors.Normalize(vmin=0, vmax=255)
+                #     norm_x = mcolors.Normalize(vmin=0, vmax=255)
+                #     norm_y = mcolors.Normalize(vmin=0, vmax=255)
+                #     norm_z = mcolors.Normalize(vmin=0, vmax=255)
 
-                    # Add color bars for each channel
-                    cbar_x = plt.colorbar(plt.cm.ScalarMappable(cmap='Reds', norm=norm_x), ax=plt.gca(), orientation='horizontal', fraction=0.046, pad=0.04)
-                    cbar_x.set_label('X Offset (Red)')
+                #     # Add color bars for each channel
+                #     cbar_x = plt.colorbar(plt.cm.ScalarMappable(cmap='Reds', norm=norm_x), ax=plt.gca(), orientation='horizontal', fraction=0.046, pad=0.04)
+                #     cbar_x.set_label('X Offset (Red)')
                     
-                    cbar_y = plt.colorbar(plt.cm.ScalarMappable(cmap='Greens', norm=norm_y), ax=plt.gca(), orientation='horizontal', fraction=0.046, pad=0.08)
-                    cbar_y.set_label('Y Offset (Green)')
+                #     cbar_y = plt.colorbar(plt.cm.ScalarMappable(cmap='Greens', norm=norm_y), ax=plt.gca(), orientation='horizontal', fraction=0.046, pad=0.08)
+                #     cbar_y.set_label('Y Offset (Green)')
                     
-                    cbar_z = plt.colorbar(plt.cm.ScalarMappable(cmap='Blues', norm=norm_z), ax=plt.gca(), orientation='horizontal', fraction=0.046, pad=0.12)
-                    cbar_z.set_label('Z Offset (Blue)')
+                #     cbar_z = plt.colorbar(plt.cm.ScalarMappable(cmap='Blues', norm=norm_z), ax=plt.gca(), orientation='horizontal', fraction=0.046, pad=0.12)
+                #     cbar_z.set_label('Z Offset (Blue)')
 
-                    plt.savefig(f"{save_path}\\output_{num_epoch}_xyz_{i}64.png")
+                #     plt.savefig(f"{save_path}\\output_{num_epoch}_xyz_{i}64.png")
 
-                    plt.clf()
+                #     plt.clf()
 
                         
             if self.cfg.model.max_sh_degree > 0:
-                features_rest = split_network_outputs[6]
+                features_rest = split_network_outputs[5]
 
             pos = self.get_pos_from_network_output(depth, offset, focals_pixels, const_offset=const_offset)
 
@@ -831,16 +842,16 @@ class GaussianSplatPredictor(nn.Module):
                                                            N_views_xa=N_views_xa
                                                            ).split(self.split_dimensions_without_offset, dim=1)
 
-            depth, opacity, scaling, rotation, features_dc = split_network_outputs[:5]
+            opacity, scaling, rotation, features_dc = split_network_outputs[:4]
             if self.cfg.model.max_sh_degree > 0:
-                features_rest = split_network_outputs[5]
+                features_rest = split_network_outputs[4]
 
             pos = self.get_pos_from_network_output(depth, 0.0, focals_pixels, const_offset=const_offset)
-            print("*****************GOT HERE***************")
-            if num_epoch % 250 == 1:
-                with open(f'E:\\Coding\\Computer Vision\\splatter-image\\tests\\training_out_1\\depth.{num_epoch}.txt', 'w') as f:
-                    f.write('--------------DEPTH------------')
-                    f.write(depth)
+            # print("*****************GOT HERE***************")
+            # if num_epoch % 250 == 1:
+            #     with open(f'E:\\Coding\\Computer Vision\\splatter-image\\tests\\training_out_1\\depth.{num_epoch}.txt', 'w') as f:
+            #         f.write('--------------DEPTH------------')
+            #         f.write(depth)
 
                     
 
@@ -860,8 +871,8 @@ class GaussianSplatPredictor(nn.Module):
         out_dict = {
             "xyz": pos, 
             "rotation": self.flatten_vector(self.rotation_activation(rotation)),
-            "features_dc": self.flatten_vector(features_dc).unsqueeze(2),
-            "depth": depth.detach().cpu().squeeze(1).numpy()
+            "features_dc": self.flatten_vector(features_dc).unsqueeze(2)
+            # "depth": depth.detach().cpu().squeeze(1).numpy()
                 }
 
         if activate_output:

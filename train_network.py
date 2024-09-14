@@ -187,7 +187,7 @@ def main(cfg: DictConfig):
                                                 data["view_to_world_transforms"][:, :cfg.data.input_images, ...],
                                                 rot_transform_quats,
                                                 focals_pixels_pred, num_epoch=iteration)
-            gaussian_splats.pop('depth')
+            # gaussian_splats.pop('depth')
 
             if cfg.data.category == "hydrants" or cfg.data.category == "teddybears":
                 # regularize very big gaussians
@@ -328,7 +328,7 @@ def main(cfg: DictConfig):
                                                         vis_data["view_to_world_transforms"][:, :cfg.data.input_images, ...],
                                                         rot_transform_quats,
                                                         focals_pixels_pred)
-                    gaussian_splats_vis.pop('depth')
+                    # gaussian_splats_vis.pop('depth')
                     test_loop = []
                     test_loop_gt = []
                     for r_idx in range(vis_data["gt_images"].shape[1]):
