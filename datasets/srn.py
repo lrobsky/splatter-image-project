@@ -160,13 +160,11 @@ class SRNDataset(SharedDataset):
                     len(self.all_rgbs[example_id])
                     )[:self.imgs_per_obj]
 
-            # frame_idxs = torch.cat([frame_idxs[:self.cfg.data.input_images], frame_idxs], dim=0)
+            frame_idxs = torch.cat([frame_idxs[:self.cfg.data.input_images], frame_idxs], dim=0)
             # print(frame_idxs)
 
         else:
             input_idxs = self.test_input_idxs
-            # frame_idxs = torch.cat([torch.tensor(input_idxs), 
-            #             torch.tensor([i for i in range(50) if i not in input_idxs])], dim=0) 
             frame_idxs = torch.cat([torch.tensor(input_idxs), 
                                     torch.tensor([i for i in range(251) if i not in input_idxs])], dim=0) 
 
