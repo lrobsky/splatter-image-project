@@ -170,16 +170,29 @@ class SRNDataset(SharedDataset):
             frame_idxs = torch.cat([torch.tensor(input_idxs), 
                                     torch.tensor([i for i in range(251) if i not in input_idxs])], dim=0) 
 
-        images_and_camera_poses = {
-            "gt_images": self.all_rgbs[example_id][frame_idxs].clone(),
-            "world_view_transforms": self.all_world_view_transforms[example_id][frame_idxs],
-            "view_to_world_transforms": self.all_view_to_world_transforms[example_id][frame_idxs],
-            "full_proj_transforms": self.all_full_proj_transforms[example_id][frame_idxs],
-            "camera_centers": self.all_camera_centers[example_id][frame_idxs],
-            "depths": self.all_depths[example_id][frame_idxs]
-            # "dir": self.dir_path
-            # "frame_idxs": frame_idxs
-        }
+
+        if self.dataset_name == 'train':
+            images_and_camera_poses = {
+                "gt_images": self.all_rgbs[example_id][frame_idxs].clone(),
+                "world_view_transforms": self.all_world_view_transforms[example_id][frame_idxs],
+                "view_to_world_transforms": self.all_view_to_world_transforms[example_id][frame_idxs],
+                "full_proj_transforms": self.all_full_proj_transforms[example_id][frame_idxs],
+                "camera_centers": self.all_camera_centers[example_id][frame_idxs],
+                "depths": self.all_depths[example_id][frame_idxs]
+                # "dir": self.dir_path
+                # "frame_idxs": frame_idxs
+            }
+        else:
+            images_and_camera_poses = {
+                "gt_images": self.all_rgbs[example_id][frame_idxs].clone(),
+                "world_view_transforms": self.all_world_view_transforms[example_id][frame_idxs],
+                "view_to_world_transforms": self.all_view_to_world_transforms[example_id][frame_idxs],
+                "full_proj_transforms": self.all_full_proj_transforms[example_id][frame_idxs],
+                "camera_centers": self.all_camera_centers[example_id][frame_idxs],
+                "depths": self.all_depths[example_id]
+                # "dir": self.dir_path
+                # "frame_idxs": frame_idxs
+            }
 
         images_and_camera_poses = self.make_poses_relative_to_first(images_and_camera_poses)
         images_and_camera_poses["source_cv2wT_quat"] = self.get_source_cw2wT(images_and_camera_poses["view_to_world_transforms"])

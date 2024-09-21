@@ -47,7 +47,8 @@ def check_dataloader(dataloader):
         break
 
 @torch.no_grad()
-def evaluate_dataset(model, dataloader, device, model_cfg, save_vis=0, out_folder=None):
+def evaluate_dataset(model, dataloader, device, model_cfg, save_vis=0, out_folder=None
+                     ):
     """
     Runs evaluation on the dataset passed in the dataloader. 
     Computes, prints and saves PSNR, SSIM, LPIPS.
@@ -56,170 +57,125 @@ def evaluate_dataset(model, dataloader, device, model_cfg, save_vis=0, out_folde
     """
 
     if save_vis > 0:
+
         os.makedirs(out_folder, exist_ok=True)
 
-    # with open("scores.txt", "w+") as f:
-    #     f.write("")
+    with open("scores.txt", "w+") as f:
+        f.write("")
 
     bg_color = [1, 1, 1] if model_cfg.data.white_background else [0, 0, 0]
     background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 
-    # # instantiate metricator
-    # metricator = Metricator(device)
+    # instantiate metricator
+    metricator = Metricator(device)
 
-    # psnr_all_examples_novel = []
-    # ssim_all_examples_novel = []
-    # lpips_all_examples_novel = []
+    psnr_all_examples_novel = []
+    ssim_all_examples_novel = []
+    lpips_all_examples_novel = []
 
-    # psnr_all_examples_cond = []
-    # ssim_all_examples_cond = []
-    # lpips_all_examples_cond = []
+    psnr_all_examples_cond = []
+    ssim_all_examples_cond = []
+    lpips_all_examples_cond = []
+
     for d_idx, data in enumerate(tqdm.tqdm(dataloader)):
-        # d_idx is number of example
-        # psnr_all_renders_novel = []
-        # ssim_all_renders_novel = []
-        # lpips_all_renders_novel = []
-        # psnr_all_renders_cond = []
-        # ssim_all_renders_cond = []
-        # lpips_all_renders_cond = []
-        dir_path = data.pop('dir')
-        frame_idxs = data.pop('frame_idxs')
+        psnr_all_renders_novel = []
+        ssim_all_renders_novel = []
+        lpips_all_renders_novel = []
+        psnr_all_renders_cond = []
+        ssim_all_renders_cond = []
+        lpips_all_renders_cond = []
+
         data = {k: v.to(device) for k, v in data.items()}
-        new_folder_path = os.path.join(dir_path[0], "depth_images")
-
-        # if os.path.exists(new_folder_path):
-        #     # Delete everything inside the folder
-        #     for filename in os.listdir(new_folder_path):
-        #         file_path = os.path.join(new_folder_path, filename)
-        #         if os.path.isfile(file_path) or os.path.islink(file_path):
-        #             os.unlink(file_path)  # Remove the file
-        #         elif os.path.isdir(file_path):
-        #             shutil.rmtree(file_path)  # Remove the directory and its contents
+        # input_images = data["gt_images"][:, :model_cfg.data.input_images, ...]
+        # print(f'input_channel={input_images.shape}')
 
 
-        os.makedirs(new_folder_path, exist_ok=True)
 
-        print('************************')
-        print(dir_path)
-        print('************************')
+        rot_transform_quats = data["source_cv2wT_quat"][:, :model_cfg.data.input_images]
 
+        if model_cfg.data.category == "hydrants" or model_cfg.data.category == "teddybears":
+            focals_pixels_pred = data["focals_pixels"][:, :model_cfg.data.input_images, ...]
+        else:
+            focals_pixels_pred = None
 
-        frame_idxs = frame_idxs.squeeze(0)
-        for r_idx in range(data["gt_images"].shape[1]):
-            # batch has length 1, the first image is conditioning
-            rot_transform_quats = data["source_cv2wT_quat"][:, r_idx:r_idx + 1]
+        if model_cfg.data.origin_distances:
+            input_images = torch.cat([data["gt_images"][:, :model_cfg.data.input_images, ...],
+                                      data["origin_distances"][:, :model_cfg.data.input_images, ...]],
+                                      dim=2)
+        else:
+            input_images = data["gt_images"][:, :model_cfg.data.input_images, ...]
+            depth_channel = data["depths"][:, :model_cfg.data.input_images, ...]
+            # print(f'depth_channel={depth_channel.shape}')
+            input_images = torch.cat((input_images, depth_channel), dim=2) 
 
-            if model_cfg.data.category == "hydrants" or model_cfg.data.category == "teddybears":
-                focals_pixels_pred = data["focals_pixels"][:, r_idx:r_idx + 1, ...]
+        example_id = dataloader.dataset.get_example_id(d_idx)
+        if d_idx < save_vis:
+
+            out_example_gt = os.path.join(out_folder, "{}_".format(d_idx) + example_id + "_gt")
+            out_example = os.path.join(out_folder, "{}_".format(d_idx) + example_id)
+
+            os.makedirs(out_example_gt, exist_ok=True)
+            os.makedirs(out_example, exist_ok=True)
+
+        # batch has length 1, the first image is conditioning
+        reconstruction = model(input_images,
+                               data["view_to_world_transforms"][:, :model_cfg.data.input_images, ...],
+                               rot_transform_quats,
+                               focals_pixels_pred)
+        reconstruction.pop("depth")
+
+        for r_idx in range( data["gt_images"].shape[1]):
+            if "focals_pixels" in data.keys():
+                focals_pixels_render = data["focals_pixels"][0, r_idx]
             else:
-                focals_pixels_pred = None
+                focals_pixels_render = None
+            image = render_predicted({k: v[0].contiguous() for k, v in reconstruction.items()},
+                                     data["world_view_transforms"][0, r_idx],
+                                     data["full_proj_transforms"][0, r_idx], 
+                                     data["camera_centers"][0, r_idx],
+                                     background,
+                                     model_cfg,
+                                     focals_pixels=focals_pixels_render)["render"]
 
-            if model_cfg.data.origin_distances:
-                input_images = torch.cat([data["gt_images"][:, r_idx:r_idx + 1, ...],
-                                        data["origin_distances"][:, r_idx:r_idx + 1, ...]],
-                                        dim=2)
-            else:
-                input_images = data["gt_images"][:, r_idx:r_idx + 1, ...]
+            if d_idx < save_vis:
+                # vis_image_preds(reconstruction, out_example)
+                torchvision.utils.save_image(image, os.path.join(out_example, '{0:05d}'.format(r_idx) + ".png"))
+                torchvision.utils.save_image(data["gt_images"][0, r_idx, ...], os.path.join(out_example_gt, '{0:05d}'.format(r_idx) + ".png"))
 
-            example_id = dataloader.dataset.get_example_id(d_idx)
-            # print(f'-------------- EXMAPLE ID: {example_id} --------------') # NAME OF FOLDER
-            # if d_idx < save_vis:
-            #     out_example_gt = os.path.join(out_folder, "{}_".format(d_idx) + example_id + "_gt")
-            #     out_example = os.path.join(out_folder, "{}_".format(d_idx) + example_id)
+            # exclude non-foreground images from metric computation
+            if not torch.all(data["gt_images"][0, r_idx, ...] == 0):
+                psnr, ssim, lpips = metricator.compute_metrics(image, data["gt_images"][0, r_idx, ...])
+                if r_idx < model_cfg.data.input_images:
+                    psnr_all_renders_cond.append(psnr)
+                    ssim_all_renders_cond.append(ssim)
+                    lpips_all_renders_cond.append(lpips)
+                else:
+                    psnr_all_renders_novel.append(psnr)
+                    ssim_all_renders_novel.append(ssim)
+                    lpips_all_renders_novel.append(lpips)
 
-            #     os.makedirs(out_example_gt, exist_ok=True)
-            #     os.makedirs(out_example, exist_ok=True)
+        psnr_all_examples_cond.append(sum(psnr_all_renders_cond) / len(psnr_all_renders_cond))
+        ssim_all_examples_cond.append(sum(ssim_all_renders_cond) / len(ssim_all_renders_cond))
+        lpips_all_examples_cond.append(sum(lpips_all_renders_cond) / len(lpips_all_renders_cond))
 
+        psnr_all_examples_novel.append(sum(psnr_all_renders_novel) / len(psnr_all_renders_novel))
+        ssim_all_examples_novel.append(sum(ssim_all_renders_novel) / len(ssim_all_renders_novel))
+        lpips_all_examples_novel.append(sum(lpips_all_renders_novel) / len(lpips_all_renders_novel))
 
-            reconstruction = model(input_images,
-                                data["view_to_world_transforms"][:, r_idx:r_idx + 1, ...],
-                                rot_transform_quats,
-                                focals_pixels_pred)
-            
-            
-            # Create the directory and save the depth image there
+        with open("scores.txt", "a+") as f:
+            f.write("{}_".format(d_idx) + example_id + \
+                    " " + str(psnr_all_examples_novel[-1]) + \
+                    " " + str(ssim_all_examples_novel[-1]) + \
+                    " " + str(lpips_all_examples_novel[-1]) + "\n")
 
-            # Iterate over all the depth maps in the reconstruction
-            depth_img = reconstruction.pop('depth')
-            depth_img = depth_img.squeeze(0)  # Remove batch dimension
+    scores = {"PSNR_cond": sum(psnr_all_examples_cond) / len(psnr_all_examples_cond),
+              "SSIM_cond": sum(ssim_all_examples_cond) / len(ssim_all_examples_cond),
+              "LPIPS_cond": sum(lpips_all_examples_cond) / len(lpips_all_examples_cond),
+              "PSNR_novel": sum(psnr_all_examples_novel) / len(psnr_all_examples_novel),
+              "SSIM_novel": sum(ssim_all_examples_novel) / len(ssim_all_examples_novel),
+              "LPIPS_novel": sum(lpips_all_examples_novel) / len(lpips_all_examples_novel)}
 
-            frame_idx_tensor = frame_idxs[r_idx]
-            frame_idx = frame_idx_tensor.item()  # Convert the first value to an integer
-            depth_image_filename = os.path.join(new_folder_path, f"depth_image_{frame_idx}.png")
-
-            # Save the depth image with the correct frame number
-            plt.imsave(depth_image_filename, depth_img, cmap='gray')
-        
-
-
-
-
-
-            
-
-        # for r_idx in range(data["gt_images"].shape[1]):
-        #     # r_idx = number of image
-        #     if "focals_pixels" in data.keys():
-        #         focals_pixels_render = data["focals_pixels"][0, r_idx]
-        #     else:
-        #         focals_pixels_render = None
-        #     image = render_predicted({k: v[0].contiguous() for k, v in reconstruction.items()},
-        #                              data["world_view_transforms"][0, r_idx],
-        #                              data["full_proj_transforms"][0, r_idx], 
-        #                              data["camera_centers"][0, r_idx],
-        #                              background,
-        #                              model_cfg,
-        #                              focals_pixels=focals_pixels_render)["render"]
-
-            # if d_idx < save_vis:
-            #     # vis_image_preds(reconstruction, out_example)
-            #     torchvision.utils.save_image(image, os.path.join(out_example, '{0:05d}'.format(r_idx) + ".png"))
-            #     torchvision.utils.save_image(data["gt_images"][0, r_idx, ...], os.path.join(out_example_gt, '{0:05d}'.format(r_idx) + ".png"))
-
-        #     # exclude non-foreground images from metric computation
-        #     if not torch.all(data["gt_images"][0, r_idx, ...] == 0):
-        #         psnr, ssim, lpips = metricator.compute_metrics(image, data["gt_images"][0, r_idx, ...])
-        #         if r_idx < model_cfg.data.input_images:
-        #             psnr_all_renders_cond.append(psnr)
-        #             ssim_all_renders_cond.append(ssim)
-        #             lpips_all_renders_cond.append(lpips)
-        #         else:
-        #             psnr_all_renders_novel.append(psnr)
-        #             ssim_all_renders_novel.append(ssim)
-        #             lpips_all_renders_novel.append(lpips)
-
-        # # Check if lists are non-empty before calculating mean
-        # if psnr_all_renders_cond:
-        #     psnr_all_examples_cond.append(sum(psnr_all_renders_cond) / len(psnr_all_renders_cond))
-        # if ssim_all_renders_cond:
-        #     ssim_all_examples_cond.append(sum(ssim_all_renders_cond) / len(ssim_all_renders_cond))
-        # if lpips_all_renders_cond:
-        #     lpips_all_examples_cond.append(sum(lpips_all_renders_cond) / len(lpips_all_renders_cond))
-        
-        # if psnr_all_renders_novel:
-        #     psnr_all_examples_novel.append(sum(psnr_all_renders_novel) / len(psnr_all_renders_novel))
-        # if ssim_all_renders_novel:
-        #     ssim_all_examples_novel.append(sum(ssim_all_renders_novel) / len(ssim_all_renders_novel))
-        # if lpips_all_renders_novel:
-        #     lpips_all_examples_novel.append(sum(lpips_all_renders_novel) / len(lpips_all_renders_novel))
-
-        # with open("scores.txt", "a+") as f:
-        #     f.write("{}_".format(d_idx) + example_id + \
-        #             " " + str(psnr_all_examples_novel[-1]) + \
-        #             " " + str(ssim_all_examples_novel[-1]) + \
-        #             " " + str(lpips_all_examples_novel[-1]) + "\n")
-
-    # # Check if lists are non-empty before calculating mean
-    # scores = {
-    #     "PSNR_cond": sum(psnr_all_examples_cond) / len(psnr_all_examples_cond) if psnr_all_examples_cond else 0,
-    #     "SSIM_cond": sum(ssim_all_examples_cond) / len(ssim_all_examples_cond) if ssim_all_examples_cond else 0,
-    #     "LPIPS_cond": sum(lpips_all_examples_cond) / len(lpips_all_examples_cond) if lpips_all_examples_cond else 0,
-    #     "PSNR_novel": sum(psnr_all_examples_novel) / len(psnr_all_examples_novel) if psnr_all_examples_novel else 0,
-    #     "SSIM_novel": sum(ssim_all_examples_novel) / len(ssim_all_examples_novel) if ssim_all_examples_novel else 0,
-    #     "LPIPS_novel": sum(lpips_all_examples_novel) / len(lpips_all_examples_novel) if lpips_all_examples_novel else 0
-    # }
-    return None
-    # return scores
+    return scores
 
 
 @torch.no_grad()

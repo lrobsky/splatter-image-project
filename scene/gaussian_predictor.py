@@ -553,27 +553,27 @@ class GaussianSplatPredictor(nn.Module):
         bias_inits = []
 
         if with_offset:
-            split_dimensions = split_dimensions + [3, 1, 3, 4, 3]
-            scale_inits = scale_inits + [
+            split_dimensions = split_dimensions + [1, 3, 1, 3, 4, 3]
+            scale_inits = scale_inits + [cfg.model.depth_scale, 
                            cfg.model.xyz_scale, 
                            cfg.model.opacity_scale, 
                            cfg.model.scale_scale,
                            1.0,
                            5.0]
-            bias_inits = [
+            bias_inits = [cfg.model.depth_bias,
                           cfg.model.xyz_bias, 
                           cfg.model.opacity_bias,
                           np.log(cfg.model.scale_bias),
                           0.0,
                           0.0]
         else:
-            split_dimensions = split_dimensions + [1, 3, 4, 3]
-            scale_inits = scale_inits + [
+            split_dimensions = split_dimensions + [1, 1, 3, 4, 3]
+            scale_inits = scale_inits + [cfg.model.depth_scale, 
                            cfg.model.opacity_scale, 
                            cfg.model.scale_scale,
                            1.0,
                            5.0]
-            bias_inits = bias_inits + [
+            bias_inits = bias_inits + [cfg.model.depth_bias,
                           cfg.model.opacity_bias,
                           np.log(cfg.model.scale_bias),
                           0.0,
@@ -672,7 +672,7 @@ class GaussianSplatPredictor(nn.Module):
             assert torch.all(focals_pixels > 0)
             ray_dirs_xy = ray_dirs_xy.clone()
             ray_dirs_xy[:, :2, ...] = ray_dirs_xy[:, :2, ...] / focals_pixels.unsqueeze(2).unsqueeze(3)
-
+        #
         # depth and offsets are shaped as (b 3 h w)
         if const_offset is not None:
             depth = self.depth_act(depth_network) * (self.cfg.data.zfar - self.cfg.data.znear) + self.cfg.data.znear + const_offset
@@ -690,11 +690,6 @@ class GaussianSplatPredictor(nn.Module):
                 activate_output=True,
                 num_epoch=5000
                 ):
-        # Pull the depth image from the data x
-        # print(f'x shape = {x.shape}')
-        depth = x[:,:,3,...]
-        # print(f'depth shape = {depth.shape}')
-        
         B = x.shape[0]
         N_views = x.shape[1]
         # UNet attention will reshape outputs so that there is cross-view attention
@@ -725,22 +720,16 @@ class GaussianSplatPredictor(nn.Module):
 
         source_cameras_view_to_world = source_cameras_view_to_world.reshape(B*N_views, *source_cameras_view_to_world.shape[2:])
         x = x.contiguous(memory_format=torch.channels_last)
-        
-
 
         if self.cfg.model.network_with_offset:
-            #
+
             split_network_outputs = self.network_with_offset(x,
                                                              film_camera_emb=film_camera_emb,
                                                              N_views_xa=N_views_xa
                                                              )
-            print(f'split_network_outputs shape before= {split_network_outputs.shape}')
+
             split_network_outputs = split_network_outputs.split(self.split_dimensions_with_offset, dim=1)
-            # print(f'split_network_outputs shape after= {split_network_outputs.shape}')
-            offset, opacity, scaling, rotation, features_dc = split_network_outputs[:5]
-            print(f'opacity shape= {opacity.shape}')
-
-
+            depth, offset, opacity, scaling, rotation, features_dc = split_network_outputs[:6]
             # print(f'------------------------------------------------------- DEPTH SHAPE  {depth.shape}')
             # if num_epoch % 100 == 0:
             #     torch.set_printoptions(profile="full")
@@ -831,7 +820,7 @@ class GaussianSplatPredictor(nn.Module):
 
                         
             if self.cfg.model.max_sh_degree > 0:
-                features_rest = split_network_outputs[5]
+                features_rest = split_network_outputs[6]
 
             pos = self.get_pos_from_network_output(depth, offset, focals_pixels, const_offset=const_offset)
 
@@ -842,9 +831,9 @@ class GaussianSplatPredictor(nn.Module):
                                                            N_views_xa=N_views_xa
                                                            ).split(self.split_dimensions_without_offset, dim=1)
 
-            opacity, scaling, rotation, features_dc = split_network_outputs[:4]
+            depth, opacity, scaling, rotation, features_dc = split_network_outputs[:5]
             if self.cfg.model.max_sh_degree > 0:
-                features_rest = split_network_outputs[4]
+                features_rest = split_network_outputs[5]
 
             pos = self.get_pos_from_network_output(depth, 0.0, focals_pixels, const_offset=const_offset)
             # print("*****************GOT HERE***************")
@@ -871,8 +860,8 @@ class GaussianSplatPredictor(nn.Module):
         out_dict = {
             "xyz": pos, 
             "rotation": self.flatten_vector(self.rotation_activation(rotation)),
-            "features_dc": self.flatten_vector(features_dc).unsqueeze(2)
-            # "depth": depth.detach().cpu().squeeze(1).numpy()
+            "features_dc": self.flatten_vector(features_dc).unsqueeze(2),
+            "depth": depth.detach().cpu().squeeze(1).numpy()
                 }
 
         if activate_output:
