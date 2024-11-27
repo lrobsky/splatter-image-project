@@ -3,7 +3,7 @@ This repository contains some modification of the "Splatter Image: Ultra-Fast Si
 The original model is an ultra-fast approach to 3D reconstruction from a single 2D image using 3D Gaussian Splattings.  
 This README details the original concept, the modifications made, and instructions on how to run the code.
 
-## What is 3D gaussian splattings ? 
+## What is 3D Gaussian Splattings ? 
 3D Gaussian Splattings is a method that reconstructs 3D geometry from a single image by rendering Gaussian splats in 3D space.  
 The technique achieves ultra-fast rendering speeds and allows for generating novel 3D views from a single 2D input image.  
 For more information, visit the original [GitHub repository](https://github.com/szymanowiczs/splatter-image) or refer to the [paper](https://arxiv.org/pdf/2312.13150).
