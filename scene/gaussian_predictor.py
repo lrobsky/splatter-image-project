@@ -748,14 +748,7 @@ class GaussianSplatPredictor(nn.Module):
                 features_rest = split_network_outputs[5]
 
             pos = self.get_pos_from_network_output(depth, 0.0, focals_pixels, const_offset=const_offset)
-            
-            # print("*****************GOT HERE***************")
-            # if num_epoch % 250 == 1:
-            #     with open(f'E:\\Coding\\Computer Vision\\splatter-image\\tests\\training_out_1\\depth.{num_epoch}.txt', 'w') as f:
-            #         f.write('--------------DEPTH------------')
-            #         f.write(depth)
-
-                    
+                             
 
         if self.cfg.model.isotropic:
             scaling_out = torch.cat([scaling[:, :1, ...], scaling[:, :1, ...], scaling[:, :1, ...]], dim=1)

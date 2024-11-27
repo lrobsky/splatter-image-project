@@ -40,7 +40,7 @@ class SRNDataset(SharedDataset):
             glob.glob(os.path.join(self.base_path, "*", "intrinsics.txt"))
         )
 
-        print(len(self.intrins))
+        # print(len(self.intrins))
         if cfg.data.subset != -1:
             self.intrins = self.intrins[:cfg.data.subset]
 
@@ -50,6 +50,7 @@ class SRNDataset(SharedDataset):
             fovY=cfg.data.fov * 2 * np.pi / 360).transpose(0,1)
         
         # self.imgs_per_obj = self.cfg.opt.imgs_per_obj
+        # !
         self.imgs_per_obj = 50
 
         # in deterministic version the number of testing images
@@ -72,22 +73,14 @@ class SRNDataset(SharedDataset):
         
         self.dir_path = os.path.dirname(intrin_path)
         rgb_paths = sorted(glob.glob(os.path.join(self.dir_path, "rgb", "*")))
-        # print(f'dir={self.dir_path}')
-        # print(f'rgb={len(rgb_paths)}')
+
         pose_paths = sorted(glob.glob(os.path.join(self.dir_path, "pose", "*")))
-        # print(f'pose={len(pose_paths)}')
+
         #
         depth_paths = sorted(glob.glob(os.path.join(self.dir_path, "depth_images", "*")), key= extract_number)
-        # print(f'depth={len(depth_paths)}')
         #
         # assert len(rgb_paths) == len(pose_paths) == len(depth_paths)
         assert len(rgb_paths) == len(pose_paths)
-
-        # ****
-        # print(f'************************')
-        # for i in range(len(rgb_paths)):
-        #     print(rgb_paths[i])
-        # print(f'************************')
         
 
         if not hasattr(self, "all_rgbs"):
@@ -161,6 +154,7 @@ class SRNDataset(SharedDataset):
                     )[:self.imgs_per_obj]
 
             frame_idxs = torch.cat([frame_idxs[:self.cfg.data.input_images], frame_idxs], dim=0)
+            #!
             # print(frame_idxs)
 
         else:
