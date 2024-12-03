@@ -16,7 +16,7 @@ from utils.general_utils import safe_state
 from utils.loss_utils import l1_loss, l2_loss
 import lpips as lpips_lib
 
-from eval import evaluate_dataset
+from generate_depth import generate_depth_images
 from gaussian_renderer import render_predicted
 from scene.gaussian_predictor import GaussianSplatPredictor
 from datasets.dataset_factory import get_dataset
@@ -360,13 +360,13 @@ def main(cfg: DictConfig):
                 torch.cuda.empty_cache()
                 print("\n[ITER {}] Validating".format(iteration + 1))
                 if cfg.opt.ema.use:
-                    scores = evaluate_dataset(
+                    scores = generate_depth_images(
                         ema, 
                         val_dataloader, 
                         device=device,
                         model_cfg=cfg)
                 else:
-                    scores = evaluate_dataset(
+                    scores = generate_depth_images(
                         gaussian_predictor, 
                         val_dataloader, 
                         device=device,

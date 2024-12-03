@@ -19,15 +19,7 @@ from datasets.dataset_factory import get_dataset
 from utils.loss_utils import ssim as ssim_fn
 import shutil
 
-class Metricator():
-    def __init__(self, device):
-        self.lpips_net = lpips_lib.LPIPS(net='vgg').to(device)
-    def compute_metrics(self, image, target):
-        lpips = self.lpips_net( image.unsqueeze(0) * 2 - 1, target.unsqueeze(0) * 2 - 1).item()
-        psnr = -10 * torch.log10(torch.mean((image - target) ** 2, dim=[0, 1, 2])).item()
-        ssim = ssim_fn(image, target).item()
-        return psnr, ssim, lpips
-    
+
 def check_dataset(dataset):
     print(f"Dataset length: {len(dataset)}")
     
@@ -47,20 +39,12 @@ def check_dataloader(dataloader):
         break
 
 @torch.no_grad()
-def evaluate_dataset(model, dataloader, device, model_cfg, save_vis=0, out_folder=None,split='test'):
-    """
-    Runs evaluation on the dataset passed in the dataloader. 
-    Computes, prints and saves PSNR, SSIM, LPIPS.
-    Args:
-        save_vis: how many examples will have visualisations saved
-    """
+def generate_depth_images(model, dataloader, device, model_cfg, save_vis=0, out_folder=None,split='test'):
+
 
     if save_vis > 0:
 
         os.makedirs(out_folder, exist_ok=True)
-
-    with open("scores.txt", "w+") as f:
-        f.write("")
 
     bg_color = [1, 1, 1] if model_cfg.data.white_background else [0, 0, 0]
     background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
@@ -84,11 +68,6 @@ def evaluate_dataset(model, dataloader, device, model_cfg, save_vis=0, out_folde
                         shutil.rmtree(file_path)  # Remove the directory and its contents
             os.makedirs(new_folder_path, exist_ok=True)
 
-            # print('************************')
-            # print(dir_path)
-            # print('************************')
-
-
 
 
             rot_transform_quats = data["source_cv2wT_quat"][:, :model_cfg.data.input_images]
@@ -106,13 +85,6 @@ def evaluate_dataset(model, dataloader, device, model_cfg, save_vis=0, out_folde
                 input_images = data["gt_images"][:, :model_cfg.data.input_images, ...]
 
             example_id = dataloader.dataset.get_example_id(d_idx)
-            # if d_idx < save_vis:
-
-            #     out_example_gt = os.path.join(out_folder, "{}_".format(d_idx) + example_id + "_gt")
-            #     out_example = os.path.join(out_folder, "{}_".format(d_idx) + example_id)
-
-            #     os.makedirs(out_example_gt, exist_ok=True)
-            #     os.makedirs(out_example, exist_ok=True)
 
             # batch has length 1, the first image is conditioning
             reconstruction = model(input_images,
@@ -155,13 +127,7 @@ def evaluate_dataset(model, dataloader, device, model_cfg, save_vis=0, out_folde
                     input_images = data["gt_images"][:, r_idx:r_idx + 1, ...]
 
                 example_id = dataloader.dataset.get_example_id(d_idx)
-                # print(f'-------------- EXMAPLE ID: {example_id} --------------') # NAME OF FOLDER
-                # if d_idx < save_vis:
-                #     out_example_gt = os.path.join(out_folder, "{}_".format(d_idx) + example_id + "_gt")
-                #     out_example = os.path.join(out_folder, "{}_".format(d_idx) + example_id)
 
-                #     os.makedirs(out_example_gt, exist_ok=True)
-                #     os.makedirs(out_example, exist_ok=True)
 
 
                 reconstruction = model(input_images,
@@ -184,93 +150,6 @@ def evaluate_dataset(model, dataloader, device, model_cfg, save_vis=0, out_folde
                 plt.imsave(depth_image_filename, depth_img, cmap='gray')
         
     return None
-
-
-
-@torch.no_grad()
-def eval_robustness(model, dataloader, device, model_cfg, out_folder=None):
-    """
-    Evaluates robustness to shift and zoom
-    """
-    os.makedirs(out_folder, exist_ok=True)
-
-    bg_color = [1, 1, 1] if model_cfg.data.white_background else [0, 0, 0]
-    background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
-
-    obj_idx = 98
-
-    data = {k: v.unsqueeze(0) for k, v in dataloader.dataset[obj_idx].items()}
-    data = {k: v.to(device) for k, v in data.items()}
-    
-    rot_transform_quats = data["source_cv2wT_quat"][:, :model_cfg.data.input_images]
-    focals_pixels_pred = None
-
-    input_images = data["gt_images"][:, :model_cfg.data.input_images, ...]
-    example_id = dataloader.dataset.get_example_id(obj_idx)
-
-    resize_to_128_transform = transforms.Resize(128, 
-        interpolation=transforms.InterpolationMode.BILINEAR)
-
-    for test_zoom_idx, crop_size in enumerate([-40, -30, -20, -10, 0, 10, 20, 30, 40]):
-
-        # ================ zoom transforms ===============
-        if crop_size >= 0:
-            # crop the source images
-            input_images = data["gt_images"][
-                        0, :model_cfg.data.input_images,  
-                        :, crop_size:model_cfg.data.training_resolution-crop_size, crop_size:model_cfg.data.training_resolution-crop_size]
-        elif crop_size < 0:
-            # pad only the source images
-            padding_transform = transforms.Pad(padding=-crop_size,
-                                                fill=1.0)
-            input_images = padding_transform(data["gt_images"][0, :model_cfg.data.input_images])
-
-        if crop_size != 0:
-            input_images = resize_to_128_transform(input_images)
-        
-
-        # ================ shift transforms ===============
-        x_shift = 0
-        y_shift = crop_size
-        padding_transform = transforms.Pad(padding=(abs(x_shift), abs(y_shift)),
-                                                fill=1.0)
-
-        padded_source  = padding_transform(data["gt_images"][0, :model_cfg.data.input_images])
-        y_start = abs(y_shift) + y_shift
-        x_start = abs(x_shift) + x_shift
-        input_images = padded_source[ :, :, 
-                                        y_start : model_cfg.data.training_resolution + y_start,
-                                        x_start : model_cfg.data.training_resolution + x_start]
-
-        input_images = input_images.unsqueeze(0)
-
-        out_example_gt = os.path.join(out_folder, "{}_".format(test_zoom_idx) + example_id + "_gt")
-        out_example = os.path.join(out_folder, "{}_".format(test_zoom_idx) + example_id)
-
-        os.makedirs(out_example_gt, exist_ok=True)
-        os.makedirs(out_example, exist_ok=True)
-
-        # batch has length 1, the first image is conditioning
-        reconstruction = model(input_images,
-                                data["view_to_world_transforms"][:, :model_cfg.data.input_images, ...],
-                                rot_transform_quats,
-                                focals_pixels_pred)
-
-        for r_idx in range( data["gt_images"].shape[1]):
-            if "focals_pixels" in data.keys():
-                focals_pixels_render = data["focals_pixels"][0, r_idx]
-            else:
-                focals_pixels_render = None
-            image = render_predicted({k: v[0].contiguous() for k, v in reconstruction.items()},
-                                        data["world_view_transforms"][0, r_idx],
-                                        data["full_proj_transforms"][0, r_idx], 
-                                        data["camera_centers"][0, r_idx],
-                                        background,
-                                        model_cfg,
-                                        focals_pixels=focals_pixels_render)["render"]
-
-            torchvision.utils.save_image(image, os.path.join(out_example, '{0:05d}'.format(r_idx) + ".png"))
-            torchvision.utils.save_image(data["gt_images"][0, r_idx, ...], os.path.join(out_example_gt, '{0:05d}'.format(r_idx) + ".png"))
 
 @torch.no_grad()
 def main(dataset_name, experiment_path, device_idx, split='test', save_vis=0, out_folder=None):
@@ -322,9 +201,8 @@ def main(dataset_name, experiment_path, device_idx, split='test', save_vis=0, ou
                             persistent_workers=True, pin_memory=True, num_workers=1)
     # print(f'{dataloader}')
     # check_dataloader(dataloader)
-    scores = evaluate_dataset(model, dataloader, device, training_cfg, save_vis=save_vis, out_folder=out_folder,split='test')
-    if split != 'vis':
-        print(scores)
+    scores = generate_depth_images(model, dataloader, device, training_cfg, save_vis=save_vis, out_folder=out_folder,split='test')
+
     return scores
 
 
@@ -347,28 +225,16 @@ if __name__ == "__main__":
     args = parse_arguments()
 
     dataset_name = args.dataset_name
-    print("Evaluating on dataset {}".format(dataset_name))
+    print("Extracting depth images on dataset {}".format(dataset_name))
     experiment_path = args.experiment_path
     if args.experiment_path is None:
         print("Will load a model released with the paper.")
     else:
         print("Loading a local model according to the experiment path")
     split = args.split
-    if split == 'vis':
-        print("Will not print or save scores. Use a different --split to return scores.")
+
     out_folder = args.out_folder
     save_vis = args.save_vis
-    if save_vis == 0:
-        print("Not saving any renders (only computing scores). To save renders use flag --save_vis")
+
 
     scores = main(dataset_name, experiment_path, 0, split=split, save_vis=save_vis, out_folder=out_folder)
-    # save scores to json in the experiment folder if appropriate split was used
-    # if split != "vis":
-    #     if experiment_path is not None:
-    #         score_out_path = os.path.join(experiment_path, 
-    #                                "{}_scores.json".format(split))
-    #     else:
-    #         score_out_path = "{}_{}_scores.json".format(dataset_name, split)
-    #     with open(score_out_path, "w+") as f:
-    #         json.dump(scores, f, indent=4)
-            
