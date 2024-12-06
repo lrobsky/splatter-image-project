@@ -177,11 +177,8 @@ def main(cfg: DictConfig):
             else:
                 focals_pixels_pred = None
                 input_images = data["gt_images"][:, :cfg.data.input_images, ...]
-                # print(f'input_channel={input_images.shape}')
                 depth_channel = data["depths"][:, :cfg.data.input_images, ...]
-                # print(f'depth_channel={depth_channel.shape}')
                 input_images = torch.cat((input_images, depth_channel), dim=2) 
-                # print(f'input_channel={input_images.shape}')
 
             gaussian_splats = gaussian_predictor(input_images,
                                                 data["view_to_world_transforms"][:, :cfg.data.input_images, ...],
@@ -258,11 +255,6 @@ def main(cfg: DictConfig):
                 ema.update()
 
             print("finished iteration {} on process {}".format(iteration, fabric.global_rank))
-            # print(f'FABRIC.IS_GLOBAL_ZERO: {fabric.is_global_zero}')
-            # print(f'render_log:{cfg.logging.render_log}')
-            # print(f'loop_log:{cfg.logging.loop_log}')
-            # print(f"FIRST IF:{(iteration % cfg.logging.render_log == 0 or iteration == 1) and fabric.is_global_zero}")
-            # print(f"SECOND IF:{(iteration % cfg.logging.loop_log == 0 or iteration == 1) and fabric.is_global_zero}")
             gaussian_predictor.eval()
 
             # ========= Logging =============
@@ -285,11 +277,10 @@ def main(cfg: DictConfig):
                         wandb.log({"reg_loss_small": np.log10(srl_for_log + 1e-8)}, step=iteration)
 
                 if (iteration % cfg.logging.render_log == 0 or iteration == 0) and fabric.is_global_zero:
-                    print("Hello Lior")
                     wandb.log({"render": wandb.Image(image.clamp(0.0, 1.0).permute(1, 2, 0).detach().cpu().numpy())}, step=iteration)
                     wandb.log({"gt": wandb.Image(gt_image.permute(1, 2, 0).detach().cpu().numpy())}, step=iteration)
                 if (iteration % cfg.logging.loop_log == 0 or iteration == 0) and fabric.is_global_zero:
-                    print("Hello Daniel")
+
                     # torch.cuda.empty_cache()
                     try:
                         vis_data = next(test_iterator)
@@ -310,18 +301,15 @@ def main(cfg: DictConfig):
                                                 vis_data["origin_distances"][:, :cfg.data.input_images, ...]],
                                                 dim=2)
                         depth_channel = torch.zeros_like(input_images[:, :1, :, :]) 
-                        print(f'**********************************shape of input_images="{input_images.shape}"')
+
                         
                         
-                        # input_images = torch.cat((input_images, depth_channel), dim=1)
+
                     else:
                         focals_pixels_pred = None
                         input_images = vis_data["gt_images"][:, :cfg.data.input_images, ...]
-                        # print(f'**********************************shape of input_images="{input_images.shape}"')
                         depth_channel = vis_data["depths"][:, :cfg.data.input_images, ...]
-                        # print(f'**********************************shape of depth_channel="{depth_channel.shape}"')
                         input_images = torch.cat((input_images, depth_channel), dim=2) 
-                        # print(f'**********************************shape of last input images ="{input_images.shape}"')
 
 
                     gaussian_splats_vis = gaussian_predictor(input_images,
