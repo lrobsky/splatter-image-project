@@ -8,7 +8,8 @@
 - [Enhancing 3D Gaussian Splatting using Depth Maps](#enhancing-3d-gaussian-splatting-using-depth-maps)
   - [What is 3D Gaussian Splatting?](#what-is-3d-gaussian-splatting)
   - [What we did](#what-we-did)
-  - [Dataset, and experiment setup](#dataset-and-experiment-setup)
+  - [Setup](#setup)
+  - [Project Structure](#project-structure)
 - [Results](#results)
    - [Losses and visualization](#losses-and-visualization)
    - [Conclusions](#conclusions)
@@ -42,21 +43,32 @@ Both the original and modified models were trained and evaluated on the same dat
 4. Depth Visualization:
 During training, we extracted and visualized the depth map outputs of both models. This provided a direct comparison of depth reconstruction progress and results.
 
-## Dataset, and experiment setup
+## Setup
 For our experiment, we exclusively used the [srn_cars dataset](https://drive.google.com/file/d/19yDsEJjx9zNpOKz9o6AaK-E8ED6taJWU/view?usp=drive_link), as it provided a sufficiently large and diverse collection of samples while being manageable within the constraints of our hardware.
-The modified model was trained on 70% of the dataset, which took approximately 8 hours including both stages.  
+The modified model was trained on 70% of the dataset, which took approximately 8+ hours including both stages.  
 While the original authors trained their model for a significantly longer duration and on stronger hardware, we believe the chosen training time was sufficient to validate our hypothesis as per our results.  
 Further training could likely enhance the results but was beyond the scope of this experiment.
 
 For our setup, we used:
 
-GPU: NVIDIA Geforce RTX 3080 with 10GB VRAM.
+* **GPU**: NVIDIA Geforce RTX 3080 with 10GB VRAM.
+* **CPU**: Intel i7-11700KF.
+* **RAM**: 16GB.
+* **Software**: Python 3.12.4 and CUDA 12.4. For other libraries please refer to the requirements.txt file.
 
-CPU: Intel i7-11700KF.
+## Project Structure
+Code-wise, we have changed a few fundamental parts in the architecture of the project.
+Because of that, we have decided to split the project into two branches, this is since the two branches are fundamentally different and serve different purposes.
 
-RAM: 16GB.
+- main: This branch is for running the project using an existing depth images folder.
+  - The training cannot run without a compatible depth images folder.
+  - main uses significantly less memory than the second branch, and thus is more suitable for training.
+- saving_depth_images: This branch is solely for generating depth images from the pre-trained model.
+  - The predictor in it outputs the predicted depth image, and saves it.
+  - The data loader does not require a depth images folder to run.
 
-Software: Python 3.12.4 and CUDA 12.4. For other libraries please refer to the requirements.txt file.
+Both branches are also configured differently for logging and saving purposes.
+
 
 
 # Results
