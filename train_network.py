@@ -187,7 +187,8 @@ def main(cfg: DictConfig):
                                                 data["view_to_world_transforms"][:, :cfg.data.input_images, ...],
                                                 rot_transform_quats,
                                                 focals_pixels_pred, num_epoch=iteration)
-            gaussian_splats.pop('depth')
+            depth_log = gaussian_splats.pop('depth')
+            depth_og = data["depths"][:, :cfg.data.input_images, ...]
 
             if cfg.data.category == "hydrants" or cfg.data.category == "teddybears":
                 # regularize very big gaussians
@@ -258,11 +259,16 @@ def main(cfg: DictConfig):
                 ema.update()
 
             print("finished iteration {} on process {}".format(iteration, fabric.global_rank))
+
+            # -- DEBUG --
             # print(f'FABRIC.IS_GLOBAL_ZERO: {fabric.is_global_zero}')
             # print(f'render_log:{cfg.logging.render_log}')
             # print(f'loop_log:{cfg.logging.loop_log}')
             # print(f"FIRST IF:{(iteration % cfg.logging.render_log == 0 or iteration == 1) and fabric.is_global_zero}")
             # print(f"SECOND IF:{(iteration % cfg.logging.loop_log == 0 or iteration == 1) and fabric.is_global_zero}")
+            # print(f'input_images_shape: {input_images.shape}')
+            # print(f'depth_im_shape: {depth_log.shape}')
+            # -- -- --
             gaussian_predictor.eval()
 
             # ========= Logging =============
@@ -284,11 +290,18 @@ def main(cfg: DictConfig):
                         wandb.log({"reg_loss_big": np.log10(brl_for_log + 1e-8)}, step=iteration)
                         wandb.log({"reg_loss_small": np.log10(srl_for_log + 1e-8)}, step=iteration)
 
-                if (iteration % cfg.logging.render_log == 0 or iteration == 0) and fabric.is_global_zero:
+                if (iteration % cfg.logging.render_log == 0 or iteration == 20) and fabric.is_global_zero:
                     print("Hello Lior")
                     wandb.log({"render": wandb.Image(image.clamp(0.0, 1.0).permute(1, 2, 0).detach().cpu().numpy())}, step=iteration)
                     wandb.log({"gt": wandb.Image(gt_image.permute(1, 2, 0).detach().cpu().numpy())}, step=iteration)
-                if (iteration % cfg.logging.loop_log == 0 or iteration == 0) and fabric.is_global_zero:
+
+                if (iteration % cfg.logging.depth_log == 0 or iteration == 20) and fabric.is_global_zero:
+                    print("Hello Dior")
+                    wandb.log({"depth_predicted": wandb.Image(depth_log[0])}, step=iteration)
+                    wandb.log({"depth_og": wandb.Image(depth_og[0])}, step=iteration)
+                    # wandb.log({"og": wandb.Image(input_images)}, step=iteration)
+
+                if (iteration % cfg.logging.loop_log == 0 or iteration == 20) and fabric.is_global_zero:
                     print("Hello Daniel")
                     # torch.cuda.empty_cache()
                     try:

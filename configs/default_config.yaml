@@ -15,14 +15,14 @@ data:
   input_images: 1
   origin_distances: false
 opt:
-  iterations: 2500
+  iterations: 60001
   base_lr: 0.00005
   batch_size: 2
   betas:
     - 0.9
     - 0.999
   loss: l2
-  imgs_per_obj: 50
+  imgs_per_obj: 4
   ema: 
     use: true
     update_every: 10
@@ -54,8 +54,9 @@ model:
   isotropic: false
 
 logging:
+  depth_log: 500
   ckpt_iterations: 1000
   val_log: 10000
   loss_log: 10
-  loop_log: 100
-  render_log: 100
+  loop_log: 500
+  render_log: 500
