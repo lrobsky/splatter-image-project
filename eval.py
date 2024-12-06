@@ -86,9 +86,6 @@ def evaluate_dataset(model, dataloader, device, model_cfg, save_vis=0, out_folde
         lpips_all_renders_cond = []
 
         data = {k: v.to(device) for k, v in data.items()}
-        # input_images = data["gt_images"][:, :model_cfg.data.input_images, ...]
-        # print(f'input_channel={input_images.shape}')
-
 
 
         rot_transform_quats = data["source_cv2wT_quat"][:, :model_cfg.data.input_images]
@@ -105,7 +102,6 @@ def evaluate_dataset(model, dataloader, device, model_cfg, save_vis=0, out_folde
         else:
             input_images = data["gt_images"][:, :model_cfg.data.input_images, ...]
             depth_channel = data["depths"][:, :model_cfg.data.input_images, ...]
-            # print(f'depth_channel={depth_channel.shape}')
             input_images = torch.cat((input_images, depth_channel), dim=2) 
 
         example_id = dataloader.dataset.get_example_id(d_idx)

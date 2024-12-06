@@ -1,24 +1,98 @@
-# splatter-image
-Official implementation of **"Splatter Image: Ultra-Fast Single-View 3D Reconstruction" (CVPR 2024)**
+> This repository contains a modified version of the official implementation [`Splatter Image: Ultra-Fast Single-View 3D Reconstruction' CVPR 2024 model](https://github.com/szymanowiczs/splatter-image) to include learning from depth maps, undertaken as a project for our degree studies.
+> The original model is an ultra-fast approach to 3D reconstruction from a single 2D image using 3D Gaussian Splattings. 
+> This README details the original concept, our hypothesis, the modifications made, our results and instructions on how to run the code.
 
-[16 Apr 2024] Several big updates to the project since the first release:
-- We can now reconstruct **any object**: we trained open-category model trained on Objaverse in just 7 GPU days
-- We now have a [demo](https://huggingface.co/spaces/szymanowiczs/splatter_image) where you can upload your own pictures of **any** object and have our model reconstruct it
-- Models for all 6 datasets are now !released!. We trained 6 models: on Objaverse, multi-category ShapeNet, CO3D hydrants, CO3D teddybears, ShapeNet cars and ShapeNet chairs.
-- SOTA on multi-category ShapeNet
-- Support for multi-GPU training
-- No camera pose pre-processing in CO3D
 
-<img src="./demo_examples/demo_screenshot.png"
-            alt="Demo screenshot."/>
-# Demo
+<!-- TOC -->
+## Table Of Contents
+- [Enhancing 3D Gaussian Splatting using Depth Maps](#enhancing-3d-gaussian-splatting-using-depth-maps)
+  - [What is 3D Gaussian Splatting?](#what-is-3d-gaussian-splatting)
+  - [What we did](#what-we-did)
+- [Results](#results)
+   - [Losses and visualization](#losses-and-visualization)
+   - [Conclusions](#conclusions)
+- [Installation and Training](#installation-and-training)
+   - [Installation](#installation)
+   - [Extracting depth maps](#extracting-depth-maps)
+   - [Training the model](#training-the-model)
 
-Check out the online [demo](https://huggingface.co/spaces/szymanowiczs/splatter_image). Running the demo locally will often be even faster and you will be able to see the loops rendered with Gaussian Splatting (as opposed to the extracted .ply object which can show artefacts). To run the demo locally, simply follow the installation instructions below, and afterwards call:
-```
-python gradio_app.py
-```
+# Enhancing 3D Gaussian Splatting using Depth Maps
 
-# Installation
+## What is 3D Gaussian Splatting? 
+3D Gaussian Splatting is a method that reconstructs 3D geometry from a single image by rendering Gaussian splats in 3D space.  
+The technique achieves ultra-fast rendering speeds and allows for generating novel 3D views from a single 2D input image.  
+For more information, visit the original [GitHub repository](https://github.com/szymanowiczs/splatter-image) or refer to the [paper](https://arxiv.org/pdf/2312.13150).
+
+## What we did
+
+ Our project aimed to investigate whether augmenting the model with additional input information—in this case, depth maps—could improve convergence speed, accuracy, or overall efficiency.
+To test this hypothesis, we carried out the following steps:
+
+1. Depth Map Extraction:
+Using the original pre-trained model, we extracted and saved depth maps for all the images in our training, testing, and validation datasets.
+This was done to retrieve depth maps that we reliabley know work with the model.
+
+2. Model Architecture Modification:
+The U-Net architecture was updated to accept an additional input channel for the depth maps, allowing the model to leverage depth information during training.
+
+3. Model Evaluation:
+Both the original and modified models were trained and evaluated on the same datasets and starting weights to measure the impact of including depth maps alongside images.
+
+4. Depth Visualization:
+During training, we extracted and visualized the depth map outputs of both models. This provided a direct comparison of depth reconstruction progress and results.
+
+## Dataset, and experiment setup
+For our experiment, we exclusively used the [srn_cars dataset](https://drive.google.com/file/d/19yDsEJjx9zNpOKz9o6AaK-E8ED6taJWU/view?usp=drive_link), as it provided a sufficiently large and diverse collection of samples while being manageable within the constraints of our hardware.
+The modified model was trained on 70% of the dataset, which took approximately 8 hours including both stages.  
+While the original authors trained their model for a significantly longer duration and on stronger hardware, we believe the chosen training time was sufficient to validate our hypothesis as per our results.  
+Further training could likely enhance the results but was beyond the scope of this experiment.
+
+For our setup, we used:
+
+GPU: NVIDIA Geforce RTX 3080 with 10GB VRAM.
+
+CPU: Intel i7-11700KF.
+
+RAM: 16GB.
+
+Software: Python 3.12.4 and CUDA 12.4. For other libraries please refer to the requirements.txt file.
+
+
+# Results
+## Losses and visualization:
+We followed the original model's method of having two parts for the training, the first without LPIPS, followed by fine-tuning with LPIPS.
+
+#### Training Loss
+
+![image](https://i.imgur.com/fOHXsrc.png) ![image](https://i.imgur.com/t7TntPA.png)
+![image](https://i.imgur.com/pyrjg6e.png) ![image](https://i.imgur.com/vShNi8L.png)
+
+* Base Case: The model trained without depth images.
+* Pretrained Depth: The model trained with depth images extracted using the original trained model.
+
+#### Additional Losses
+Further comparisons were made using additional loss metrics to quantify the impact of depth images:
+![images](https://i.imgur.com/7rtMl5s.png)
+
+#### Renders
+Visual comparisons between the rendered outputs and the ground truth:
+
+(renders: left - render by the model, right - ground truth)
+
+![images](https://i.imgur.com/saRDDUo.gif) ![images](https://i.imgur.com/rhM9fKv.gif)
+![images](https://i.imgur.com/GC8o1RF.gif) ![images](https://i.imgur.com/2O9Kdbc.gif)
+
+
+## Conclusions
+
+From our evaluation, we observed a significant improvement in the model's learning by incorporating depth images, as evidenced by both visual results and loss metrics.
+
+To derive stronger conclusions, extended training durations and the exploration of alternative depth generation methods—such as MiDaS, DPT, or MegaDepth—could provide valuable insights and further enhance the model's performance. Furthermore, these findings establish a potentially promising foundation for leveraging depth maps to significantly enhance the learning capabilities of neural networks.
+
+
+# Installation and Training
+
+## Installation
 
 1. Create a conda environment: 
 ```
@@ -31,145 +105,51 @@ Install Pytorch following [official instructions](https://pytorch.org). Pytorch 
 Alternatively, you can create a separate environment with Pytorch3D 0.7.2, which you use just for CO3D data preprocessing. Then, once CO3D had been preprocessed, you can use these combinations of Python / Pytorch too. 
 - Python 3.7, Pytorch 1.12.1, CUDA 11.6
 - Python 3.8, Pytorch 2.1.1, CUDA 12.1
+- Python 3.12.4, Pytorch 2.4.0, CUDA 12.4 (Ours)
 
 Install other requirements:
 ```
 pip install -r requirements.txt
 ```
 
-2. Install Gaussian Splatting renderer, i.e. the library for rendering a Gaussian Point cloud to an image. To do so, pull the [Gaussian Splatting repository](https://github.com/graphdeco-inria/gaussian-splatting/tree/main) and, with your conda environment activated, run `pip install submodules/diff-gaussian-rasterization`. You will need to meet the [hardware and software requirements](https://github.com/graphdeco-inria/gaussian-splatting/blob/main/README.md#hardware-requirements). We did all our experimentation on an NVIDIA A6000 GPU and speed measurements on an NVIDIA V100 GPU. 
+2. Install Gaussian Splatting renderer, i.e. the library for rendering a Gaussian Point cloud to an image. To do so, pull the [Gaussian Splatting repository](https://github.com/graphdeco-inria/gaussian-splatting/tree/main) and, with your conda environment activated, run `pip install submodules/diff-gaussian-rasterization`. You will need to meet the [hardware and software requirements](https://github.com/graphdeco-inria/gaussian-splatting/blob/main/README.md#hardware-requirements).
 
-3. If you want to train on CO3D data you will need to install Pytorch3D 0.7.2. See instructions [here](https://github.com/facebookresearch/pytorch3d/blob/main/INSTALL.md). It is recommended to install with pip from a pre-built binary. Find a compatible binary [here](https://anaconda.org/pytorch3d/pytorch3d/files?page=5) and install it with `pip`. For example, with Python 3.8, Pytorch 1.13.0, CUDA 11.6 run
-`pip install --no-index --no-cache-dir pytorch3d -f https://anaconda.org/pytorch3d/pytorch3d/0.7.2/download/linux-64/pytorch3d-0.7.2-py38_cu116_pyt1130.tar.bz2`.
+3. Download the srn_cars.zip file from the [PixelNeRF data folder](https://drive.google.com/drive/folders/1PsT3uKwqHHD2bEEHkIXB99AlIjtmrEiR?usp=sharing).
 
-# Data
+4. Unzip the data file and change `SHAPENET_DATASET_ROOT` in `datasets/srn.py` to the parent folder of the unzipped folder. For example, if your folder structure is: `/home/user/SRN/srn_cars/cars_train`, in `datasets/srn.py` set  `SHAPENET_DATASET_ROOT="/home/user/SRN"`.
 
-## ShapeNet cars and chairs
-For training / evaluating on ShapeNet-SRN classes (cars, chairs) please download the srn_\*.zip (\* = cars or chairs) from [PixelNeRF data folder](https://drive.google.com/drive/folders/1PsT3uKwqHHD2bEEHkIXB99AlIjtmrEiR?usp=sharing). Unzip the data file and change `SHAPENET_DATASET_ROOT` in `datasets/srn.py` to the parent folder of the unzipped folder. For example, if your folder structure is: `/home/user/SRN/srn_cars/cars_train`, in `datasets/srn.py` set  `SHAPENET_DATASET_ROOT="/home/user/SRN"`. No additional preprocessing is needed.
 
-## CO3D hydrants and teddybears
-For training / evaluating on CO3D download the hydrant and teddybear classes from the [CO3D release](https://github.com/facebookresearch/co3d/tree/main). To do so, run the following commands:
+## Extracting depth maps
+Before extracting the depth maps, make sure to switch to the **saving_depth_images branch**. Once on the correct branch, use the following commands to extract depth maps for each dataset split (train, validation, and test):
 ```
-git clone https://github.com/facebookresearch/co3d.git
-cd co3d
-mkdir DOWNLOAD_FOLDER
-python ./co3d/download_dataset.py --download_folder DOWNLOAD_FOLDER --download_categories hydrant,teddybear
+python generate_depth.py cars --split train
 ```
-Next, set `CO3D_RAW_ROOT` to your `DOWNLOAD_FOLDER` in `data_preprocessing/preoprocess_co3d.py`. Set `CO3D_OUT_ROOT` to where you want to store preprocessed data. Run 
 ```
-python -m data_preprocessing.preprocess_co3d
-``` 
-and set `CO3D_DATASET_ROOT:=CO3D_OUT_ROOT`.
-
-## Multi-category ShapeNet
-For multi-category ShapeNet we use the ShapeNet 64x64 dataset by NMR hosted by DVR authors which can be downloaded [here](https://s3.eu-central-1.amazonaws.com/avg-projects/differentiable_volumetric_rendering/data/NMR_Dataset.zip).
-Unzip the folder and set `NMR_DATASET_ROOT` to the directory that holds sub-category folders after unzipping. In other words, `NMR_DATASET_ROOT` directory should contain folders `02691156`, `02828884`, `02933112` etc.
-
-## Objaverse
-
-For training on Objaverse we used renderings from Zero-1-to-3 which can be downloaded with the follownig command:
+python generate_depth.py cars --split val
 ```
-wget https://tri-ml-public.s3.amazonaws.com/datasets/views_release.tar.gz
 ```
-Disclaimer: note that the renderings are generated with Objaverse. The renderings as a whole are released under the ODC-By 1.0 license. The licenses for the renderings of individual objects are released under the same license creative commons that they are in Objaverse.
-
-Additionally, please download `lvis-annotations-filtered.json` from the [model repository](https://huggingface.co/szymanowiczs/splatter-image-v1/blob/main/lvis-annotations-filtered.json). 
-This json which holds the list of IDs of objects from the LVIS subset. These assets are of higher quality.
-
-Set `OBJAVERSE_ROOT` in `datasets/objaverse.py` to the directory of the unzipped folder with renderings, and set `OBJAVERSE_LVIS_ANNOTATION_PATH` in the same file to the directory of the downloaded `.json` file.
-
-Note that Objaverse dataset is meant for training and validation only. It does not have a test subset.
-
-## Google Scanned Objects
-
-For evaluating the model trained on Objaverse we use Google Scanned Objects dataset to ensure no overlap with the training set. Download [renderings provided by Free3D](https://drive.google.com/file/d/1tV-qpiD5e-GzrjW5dQpTRviZa4YV326b/view). Unzip the downloaded folder and set `GSO_ROOT` in `datasets/gso.py` to the directory of the unzipped folder.
-
-Note that Google Scanned Objects dataset is not meant for training. It is used to test the model trained on Objaverse.
-
-# Using this repository
-
-## Pretrained models
-
-Pretrained models for all datasets are now available via [Huggingface Models](https://huggingface.co/szymanowiczs/splatter-image-v1). If you just want to run qualitative / quantitative evaluation, do don't need to dowload them manually, they will be used automatically if you run the evaluation script (see below).
-
-You can also download them manually if you wish to do so, by manually clicking the download button on the [Huggingface model files page](https://huggingface.co/szymanowiczs/splatter-image-v1). Download the config file with it and see `eval.py` for how the model is loaded.
-
-
-## Evaluation
-
-Once you downloaded the relevant dataset, evaluation can be run with 
+python generate_depth.py cars --split test
 ```
-python eval.py $dataset_name
-```
-`$dataset_name` is the name of the dataset. We support:
-- `gso` (Google Scanned Objects), 
-- `objaverse` (Objaverse-LVIS), 
-- `nmr` (multi-category ShapeNet), 
-- `hydrants` (CO3D hydrants), 
-- `teddybears` (CO3D teddybears), 
-- `cars` (ShapeNet cars), 
-- `chairs` (ShapeNet chairs).
-The code will automatically download the relevant model for the requested dataset.
+The depth images will be saved under the folder "depth_images". The folder path can be changed in the 'generate_depth.py' file.
 
-You can also train your own models and evaluate it with 
-```
-python eval.py $dataset_name --experiment_path $experiment_path
-```
-`$experiment_path` should hold a `model_latest.pth` file and a `.hydra` folder with `config.yaml` inside it.
 
-To evaluate on the validation split, call with option `--split val`.
+## Training the model
+Before continuing, make sure to **switch to the main branch.**
 
-To save renders of the objects with the camera moving in a loop, call with option `--split vis`. With this option the quantitative scores are not returned since ground truth images are not available in all datasets.
-
-You can set for how many objects to save renders with option `--save_vis`.
-You can set where to save the renders with option `--out_folder`.
-
-## Training
-
-Single-view models are trained in two stages, first without LPIPS (most of the training), followed by fine-tuning with LPIPS.
+The model is trained in two stages, first without LPIPS, followed by fine-tuning with LPIPS.
 1. The first stage is ran with:
       ```
-      python train_network.py +dataset=$dataset_name
+      python train_network.py +dataset=cars
       ```
-      where $dataset_name is one of [cars,chairs,hydrants,teddybears,nmr,objaverse].
       Once it is completed, place the output directory path in configs/experiment/lpips_$experiment_name.yaml in the option `opt.pretrained_ckpt` (by default set to null).
 2. Run second stage with:
       ```
-      python train_network.py +dataset=$dataset_name +experiment=$lpips_experiment_name
+      python train_network.py +dataset=cars +experiment=lpips_100k.yaml
       ```
-      Which `$lpips_experiment_name` to use depends on the dataset.
-      If $dataset_name is in [cars,hydrants,teddybears], use lpips_100k.yaml.
-      If $dataset_name is chairs, use lpips_200k.yaml.
-      If $dataset_name is nmr, use lpips_nmr.yaml.
-      If $dataset_name is objaverse, use lpips_objaverse.yaml.
       Remember to place the directory of the model from the first stage in the appropriate .yaml file before launching the second stage.
 
-To train a 2-view model run:
-```
-python train_network.py +dataset=cars cam_embd=pose_pos data.input_images=2 opt.imgs_per_obj=5
-```
 
-## Code structure
 
-Training loop is implemented in `train_network.py` and evaluation code is in `eval.py`. Datasets are implemented in `datasets/srn.py` and `datasets/co3d.py`. Model is implemented in `scene/gaussian_predictor.py`. The call to renderer can be found in `gaussian_renderer/__init__.py`.
+##
 
-## Camera conventions
-
-Gaussian rasterizer assumes row-major order of rigid body transform matrices, i.e. that position vectors are row vectors. It also requires cameras in the COLMAP / OpenCV convention, i.e., that x points right, y down, and z away from the camera (forward).
-
-# BibTeX
-
-```
-@inproceedings{szymanowicz24splatter,
-      title={Splatter Image: Ultra-Fast Single-View 3D Reconstruction},
-      author={Stanislaw Szymanowicz and Christian Rupprecht and Andrea Vedaldi},
-      year={2024},
-      booktitle={The IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
-}
-```
-
-# Acknowledgements
-
-S. Szymanowicz is supported by an EPSRC Doctoral Training Partnerships Scholarship (DTP) EP/R513295/1 and the Oxford-Ashton Scholarship.
-A. Vedaldi is supported by ERC-CoG UNION 101001212.
-We thank Eldar Insafutdinov for his help with installation requirements.
+### Thank you for reading our repository!
