@@ -11,6 +11,7 @@
 - [Results](#results)
    - [Losses and visualization](#losses-and-visualization)
    - [Conclusions](#conclusions)
+   - [Dataset, and experiment setup](#dataset-and-experiment-setup)
 - [Installation and Training](#installation-and-training)
    - [Installation](#installation)
    - [Extracting depth maps](#extracting-depth-maps)
